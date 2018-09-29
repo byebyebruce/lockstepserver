@@ -1,0 +1,4 @@
+*.test
+*.code-workspace
+*.vscode
+debug
