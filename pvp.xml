@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+  <!-- etcdv3得节点id，用,分割  -->
+  <etcd_endpoints>10.18.97.201:2379,10.18.97.201:3379</etcd_endpoints> 
+  <!-->etcdv3键值</-->
+  <etcd_key>/game/x/pvp</etcd_key>
+  <!-->etcdv3键值自动失效时间(秒)</-->
+  <etcd_ttl>5</etcd_ttl>
+  <!-->最大房间数</-->
+  <max_room>1</max_room>
+</config>
