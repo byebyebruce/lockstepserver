@@ -22,9 +22,11 @@ services:
 
   #- mysql -e 'CREATE DATABASE goworld;'
 
-#install:
-  #- dep ensure
-  #- make
+install:
+  - go get -u github.com/golang/protobuf/proto
+  - go get -u github.com/alecthomas/log4go
+  - go get -u github.com/xtaci/kcp-go
+  - go get -u github.com/alecthomas/log4go
 
 script:
   - go test -v ./...
