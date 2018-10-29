@@ -25,3 +25,12 @@ if [ $(uname -s) = 'Linux' ]; then
 else
 	PROTOC=$DIR/../../../tools/protoc_win/protoc.exe
 fi
+
+if $PROTOC --go_out=. *.proto 
+then
+  echo build success
+  sleep 1
+else
+  echo build failed
+  get_char
+fi

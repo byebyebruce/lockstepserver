@@ -1,29 +1,29 @@
 package room
 
 import (
-	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/bailu1901/lockstepserver/network"
-	"github.com/bailu1901/lockstepserver/proto"
+	"github.com/bailu1901/lockstepserver/pb"
 	"github.com/bailu1901/lockstepserver/protocol"
-
-	"fmt"
 
 	l4g "github.com/alecthomas/log4go"
 )
 
+// TODO
+func verifyToken(secret string) string {
+	return secret
+}
+
 type Router struct {
-	sessiondID uint64
-	lost       uint64
+	totalConn uint64
 }
 
 func (m *Router) OnConnect(conn *network.Conn) bool {
 
-	id := atomic.AddUint64(&m.sessiondID, 1)
-	l4g.Debug("OnConnect [%s] %d", conn.GetRawConn().RemoteAddr().String(), id)
+	id := atomic.AddUint64(&m.totalConn, 1)
+	l4g.Debug("[router] OnConnect [%s] totalConn=%d", conn.GetRawConn().RemoteAddr().String(), id)
 	return true
 }
 
@@ -31,44 +31,70 @@ func (m *Router) OnMessage(conn *network.Conn, p network.Packet) bool {
 
 	msg := p.(*protocol.Packet)
 
-	l4g.Info("OnMessage [%s] msg=[%d] len=[%d]", conn.GetRawConn().RemoteAddr().String(), msg.GetMessageID(), len(msg.GetData()))
+	l4g.Info("[router] OnMessage [%s] msg=[%d] len=[%d]", conn.GetRawConn().RemoteAddr().String(), msg.GetMessageID(), len(msg.GetData()))
 
 	switch pb.ID(msg.GetMessageID()) {
-	case pb.ID_C2S_Connect:
-		conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_S2C_Connect), nil), time.Millisecond)
+	case pb.ID_MSG_Connect:
 
-		// TODO
 		rec := &pb.C2S_ConnectMsg{}
-		if nil != msg.UnmarshalPB(rec) {
+		if err := msg.UnmarshalPB(rec); nil != err {
+			l4g.Error("[router] msg.UnmarshalPB error=[%s]", err.Error())
 			return false
 		}
 
+		//player id
+		playerID := rec.GetPlayerID()
+		//room id
+		roomID := rec.GetBattleID()
+		//token
 		token := rec.GetToken()
-		l4g.Trace("ID_C2S_Connect token=[%s]", token)
 
-		a := strings.Split(token, ",")
-		if 2 != len(a) {
-			return false
+		ret := &pb.S2C_ConnectMsg{
+			ErrorCode: pb.ERRORCODE_ERR_Ok.Enum(),
 		}
 
-		rId, _ := strconv.ParseUint(a[0], 10, 64)
-		id, _ := strconv.ParseUint(a[1], 10, 64)
-
-		r := GetRoom(rId)
-		if nil == r {
-			return false
+		room := GetRoom(roomID)
+		if nil == room {
+			ret.ErrorCode = pb.ERRORCODE_ERR_NoRoom.Enum()
+			conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Connect), ret), time.Millisecond)
+			l4g.Error("[router] no room player=[%d] room=[%d] token=[%s]", playerID, roomID, token)
+			return true
 		}
 
-		//id := atomic.AddUint64(&m.sessiondID, 1)
+		if room.IsOver() {
+			ret.ErrorCode = pb.ERRORCODE_ERR_RoomState.Enum()
+			conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Connect), ret), time.Millisecond)
+			l4g.Error("[router] room is over player=[%d] room==[%d] token=[%s]", playerID, roomID, token)
+			return true
+		}
 
-		conn.PutExtraData(id)
-		conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_S2C_Connect), nil), time.Millisecond)
-		return r.OnConnect(conn)
+		if !room.HasPlayer(playerID) {
+			ret.ErrorCode = pb.ERRORCODE_ERR_NoPlayer.Enum()
+			conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Connect), ret), time.Millisecond)
+			l4g.Error("[router] !room.HasPlayer(playerID) player=[%d] room==[%d] token=[%s]", playerID, roomID, token)
+			return true
+		}
 
-	case pb.ID_C2S_Heartbeat:
-		conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_S2C_Heartbeat), nil), time.Millisecond)
+		// 验证token
+		if token != verifyToken(token) {
+			ret.ErrorCode = pb.ERRORCODE_ERR_Token.Enum()
+			conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Connect), ret), time.Millisecond)
+			l4g.Error("[router] verifyToken failed player=[%d] room==[%d] token=[%s]", playerID, roomID, token)
+			return true
+		}
+
+		conn.PutExtraData(playerID)
+
+		//这里只是先给加上身份标识，不能直接返回Connect成功，又后面Game返回
+		//conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Connect), ret), time.Millisecond)
+		return room.OnConnect(conn)
+
+	case pb.ID_MSG_Heartbeat:
+		conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Heartbeat), nil), time.Millisecond)
 		return true
-	case pb.ID_MSG_END: //test
+
+	case pb.ID_MSG_END:
+		// 正式版不会提供这个消息
 		conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_END), msg.GetData()), time.Millisecond)
 		return true
 	default:
@@ -80,8 +106,8 @@ func (m *Router) OnMessage(conn *network.Conn, p network.Packet) bool {
 }
 
 func (m *Router) OnClose(conn *network.Conn) {
-	id := atomic.AddUint64(&m.lost, 1)
-	fmt.Println("OnClose:", id)
+	id := atomic.LoadUint64(&m.totalConn) - 1
+	atomic.StoreUint64(&m.totalConn, id)
 
-	//atomic.AddUint64(&m.lost, 1)
+	l4g.Info("[router] OnClose: total=%d", id)
 }

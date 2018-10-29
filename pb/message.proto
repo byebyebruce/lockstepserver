@@ -1,0 +1,103 @@
+
+package pb;
+
+//消息ID
+enum ID {
+
+    MSG_BEGIN = 0;
+
+    MSG_Connect     = 1;    //连接(客户端发来第一个消息)
+    MSG_Heartbeat   = 2;    //心跳(服务端返回Connect成功之后每隔1秒发送一个心跳包)
+
+    MSG_JoinRoom    = 10;   //进入
+    MSG_Progress    = 20;   //进度
+    MSG_Ready       = 30;   //准备
+    MSG_Start       = 40;   //开始
+    MSG_Frame       = 50;   //帧数据
+    MSG_Input       = 60;   //输入
+    MSG_Result      = 70;   //结果
+
+    MSG_Close      = 100;   //房间关闭
+
+    MSG_END = 255;
+}
+
+//错误码
+enum ERRORCODE {
+    ERR_Ok          = 0;    //OK
+    ERR_NoPlayer    = 1;    //没有这个玩家
+    ERR_NoRoom      = 2;    //没有房间
+    ERR_RoomState   = 3;    //房间状态不正确
+    ERR_Token       = 4;    //Token验证失败
+}
+
+//客户端发来的第一个消息
+message C2S_ConnectMsg  {
+    optional uint64 playerID        = 1;    //唯一ID
+    optional uint64 battleID        = 2;    //战斗ID
+	optional string token           = 10;   //令牌
+}
+
+//服务端返回连接结果
+message S2C_ConnectMsg  {
+	optional ERRORCODE errorCode    = 1;    //错误码
+}
+
+//服务端返回进入房间消息
+message S2C_JoinRoomMsg  {
+	optional int32 roomseatid       = 1;   //自己的位置索引id(1~N)
+	repeated uint64 others          = 2;   //其他人的id
+	repeated int32 pros             = 3;   //其他人的进度
+	optional int32 randomSeed       = 4;   //随机种子
+}
+
+//服务端广播开始游戏消息
+message S2C_StartMsg  {
+	optional int64 timeStamp        = 1;   //同步时间戳
+
+}
+
+//读条进度
+message C2S_ProgressMsg  {
+	optional int32 pro              = 1;   //进度值0~100
+}
+
+//读条进度
+message S2C_ProgressMsg  {
+	optional uint64 id              = 1;   //id
+	optional int32 pro              = 2;   //进度值0~100
+}
+
+//操作输入消息
+message C2S_InputMsg  {
+    optional int32 sid              = 1;    //操作id
+    optional int32 x                = 2;    //操作位置x
+    optional int32 y                = 3;    //操作位置y
+    optional uint32 frameID         = 4;    //帧ID
+}
+
+//帧存储操作输入
+message InputData {
+    optional uint64 id              = 1;    //id
+    optional int32 sid              = 2;    //操作id
+    optional int32 x                = 3;    //操作位置x
+    optional int32 y                = 4;    //操作位置y
+    optional int32 roomseatid       = 5;    //操作者的位置索引id(1~N)
+}
+
+//帧数据
+message FrameData {
+    optional uint32 frameID          = 1;   //帧ID
+    repeated InputData input         = 2;   //操作输入
+}
+
+//广播帧消息
+message S2C_FrameMsg {
+    repeated FrameData frames        = 1;   //帧数据
+}
+
+//结果消息
+message C2S_ResultMsg {
+    optional uint64 winnerID          = 1; //胜利者ID
+}
+

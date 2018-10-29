@@ -33,7 +33,7 @@ import (
 var (
 	nodeId     = flag.Uint64("id", 0, "id")
 	configFile = flag.String("config", "config.xml", "config file")
-	gWeb       = flag.String("web", "", "web listen address")
+	gWeb       = flag.String("web", ":10002", "web listen address")
 	outAddress = flag.String("out", ":10086", "out listen address(':10086' means use $localip:10086)")
 )
 
@@ -58,7 +58,7 @@ func Init() bool {
 	if len(*gWeb) > 0 {
 
 		go func() {
-			e := http.ListenAndServe(fmt.Sprintf(":%s", *gWeb), nil)
+			e := http.ListenAndServe(*gWeb, nil)
 			if nil != e {
 				panic(e)
 			}

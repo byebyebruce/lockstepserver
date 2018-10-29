@@ -3,12 +3,12 @@ package game
 import (
 	"time"
 
-	"github.com/bailu1901/lockstepserver/proto"
+	"github.com/bailu1901/lockstepserver/pb"
 	"github.com/bailu1901/lockstepserver/protocol"
+	"github.com/golang/protobuf/proto"
 
 	l4g "github.com/alecthomas/log4go"
 	"github.com/bailu1901/lockstepserver/network"
-	"github.com/golang/protobuf/proto"
 )
 
 // GameState 游戏状态
@@ -22,10 +22,11 @@ const (
 )
 
 const (
-	MaxReadyTime          int64 = 40     //准备阶段最长时间，如果超过这个时间没人连进来直接关闭游戏
-	MaxGameTime           int64 = 60 * 5 //最长游戏时间
-	BroadcastOffsetFrames       = 3      //每隔多少帧广播一次
-	MaxReconnectFrames          = 60     //重连进来的人每个消息包最多包含多少帧数据
+	MaxReadyTime          int64  = 20            //准备阶段最长时间，如果超过这个时间没人连进来直接关闭游戏
+	MaxGameFrame          uint32 = 30*60*3 + 100 //每局最大帧数
+	BroadcastOffsetFrames        = 3             //每隔多少帧广播一次
+	kMaxFrameDataPerMsg          = 60            //每个消息包最多包含多少个帧数据
+	kBadNetworkThreshold         = 2             //这个时间段没有收到心跳包认为他网络很差，不再持续给发包(网络层的读写时间设置的比较长，客户端要求的方案)
 )
 
 type gameListener interface {
@@ -39,43 +40,44 @@ type gameListener interface {
 type Game struct {
 	id               uint64
 	startTime        int64
+	randomSeed       int32
 	State            GameState
 	players          map[uint64]*Player
 	logic            *lockstep
 	clientFrameCount uint32
-	result           map[uint64]uint64
+
+	result map[uint64]uint64
 
 	listener gameListener
+
+	dirty bool
 }
 
 // NewGame 构造游戏
-func NewGame(id uint64, players []uint64, listener gameListener) *Game {
+func NewGame(id uint64, players []uint64, randomSeed int32, listener gameListener) *Game {
 	g := &Game{
-		id:        id,
-		players:   make(map[uint64]*Player),
-		logic:     newLockstep(),
-		startTime: time.Now().Unix(),
-		listener:  listener,
+		id:         id,
+		players:    make(map[uint64]*Player),
+		logic:      newLockstep(),
+		startTime:  time.Now().Unix(),
+		randomSeed: randomSeed,
+		listener:   listener,
+		result:     make(map[uint64]uint64),
 	}
 
-	for _, v := range players {
-		g.players[v] = NewPlayer(v)
+	for k, v := range players {
+		g.players[v] = NewPlayer(v, int32(k+1))
 	}
 
 	return g
 }
 
-// Cleanup 清理游戏
-func (g *Game) Cleanup() {
-	for _, v := range g.players {
-		v.Cleanup()
-	}
-	g.players = make(map[uint64]*Player)
-
-}
-
 // JoinGame 加入游戏
 func (g *Game) JoinGame(id uint64, conn *network.Conn) bool {
+
+	msg := &pb.S2C_ConnectMsg{
+		ErrorCode: pb.ERRORCODE_ERR_Ok.Enum(),
+	}
 
 	p, ok := g.players[id]
 	if !ok {
@@ -84,36 +86,22 @@ func (g *Game) JoinGame(id uint64, conn *network.Conn) bool {
 	}
 
 	if k_Ready != g.State && k_Gaming != g.State {
+		msg.ErrorCode = pb.ERRORCODE_ERR_RoomState.Enum()
+		p.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_Connect), msg))
 		l4g.Error("[game(%d)] player[%d] game is over", g.id, id)
-		return false
+		return true
 	}
 
 	//把现有的玩家顶掉
-	if nil != p.Client {
-		p.Client.PutExtraData(nil)
+	if nil != p.client {
+		// TODO 这里有多线程操作的危险 如果调 p.client.Close() 会把现有刚进来的玩家提调
+		p.client.PutExtraData(nil)
 		l4g.Error("[game(%d)] player[%d] replace", g.id, id)
 	}
 
-	p.Client = conn
-	p.Online = true
+	p.Connect(conn)
 
-	pa := &pb.S2C_JoinRoomMsg{
-		Id: proto.Uint64(p.id),
-	}
-	for _, v := range g.players {
-		if p.id == v.id {
-			continue
-		}
-		pa.Others = append(pa.Others, v.id)
-	}
-
-	p.SendMessage(protocol.NewPacket(uint8(pb.ID_S2C_JoinRoom), pa))
-
-	//重连进来
-	if k_Gaming == g.State {
-		g.doReconnect(p)
-		l4g.Warn("[game(%d)] doReconnect [%d]", g.id, p.id)
-	}
+	p.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_Connect), msg))
 
 	g.listener.OnJoinGame(g.id, id)
 
@@ -149,28 +137,76 @@ func (g *Game) ProcessMsg(id uint64, msg *protocol.Packet) {
 	msgID := pb.ID(msg.GetMessageID())
 
 	switch msgID {
-	case pb.ID_C2S_JoinRoom:
-	case pb.ID_C2S_Progress:
+	case pb.ID_MSG_JoinRoom:
+		msg := &pb.S2C_JoinRoomMsg{
+			Roomseatid: proto.Int32(player.idx),
+			RandomSeed: proto.Int32(g.randomSeed),
+		}
+
+		for _, v := range g.players {
+			if player.id == v.id {
+				continue
+			}
+			msg.Others = append(msg.Others, v.id)
+			msg.Pros = append(msg.Pros, v.loadingProgress)
+		}
+
+		player.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_JoinRoom), msg))
+
+	case pb.ID_MSG_Progress:
+		if g.State > k_Ready {
+			break
+		}
 		m := &pb.C2S_ProgressMsg{}
-		msg.UnmarshalPB(m)
-		ret := protocol.NewPacket(uint8(pb.ID_S2C_Progress), &pb.S2C_ProgressMsg{
+		if err := msg.UnmarshalPB(m); nil != err {
+			l4g.Error("[game(%d)] processMsg player[%d] msg=[%d] UnmarshalPB error:[%s]", g.id, player.id, msg.GetMessageID(), err.Error())
+			return
+		}
+		player.loadingProgress = m.GetPro()
+		msg := protocol.NewPacket(uint8(pb.ID_MSG_Progress), &pb.S2C_ProgressMsg{
 
 			Id:  proto.Uint64(player.id),
 			Pro: m.Pro,
 		})
-		g.broadcastExclude(ret, player.id)
+		g.broadcastExclude(msg, player.id)
 
-	case pb.ID_C2S_Heartbeat:
-		player.SendMessage(protocol.NewPacket(uint8(pb.ID_S2C_Heartbeat), nil))
-	case pb.ID_C2S_Ready:
-		g.doReady(player)
-	case pb.ID_S2C_InputSkill:
-		m := &pb.C2S_InputSkillMsg{}
-		msg.UnmarshalPB(m)
-		g.pushInput(player, m)
-	case pb.ID_C2S_Result:
-		// TODO
-		g.result[player.id] = player.id
+	case pb.ID_MSG_Heartbeat:
+		player.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_Heartbeat), nil))
+		player.RefreshHeartbeatTime()
+	case pb.ID_MSG_Ready:
+		if k_Ready == g.State {
+			g.doReady(player)
+		} else if k_Gaming == g.State {
+			g.doReady(player)
+			//重连进来 TODO 对重连进行检查，重连比较耗费
+			g.doReconnect(player)
+			l4g.Warn("[game(%d)] doReconnect [%d]", g.id, player.id)
+		} else {
+			l4g.Error("[game(%d)] ID_MSG_Ready player[%d] state error:[%d]", g.id, player.id, g.State)
+		}
+
+	case pb.ID_MSG_Input:
+		m := &pb.C2S_InputMsg{}
+		if err := msg.UnmarshalPB(m); nil != err {
+			l4g.Error("[game(%d)] processMsg player[%d] msg=[%d] UnmarshalPB error:[%s]", g.id, player.id, msg.GetMessageID(), err.Error())
+			return
+		}
+		if !g.pushInput(player, m) {
+			l4g.Warn("[game(%d)] processMsg player[%d] msg=[%d] pushInput failed", g.id, player.id, msg.GetMessageID())
+			break
+		}
+
+		// 下一帧强制广播(客户端要求)
+		g.dirty = true
+	case pb.ID_MSG_Result:
+		m := &pb.C2S_ResultMsg{}
+		if err := msg.UnmarshalPB(m); nil != err {
+			l4g.Error("[game(%d)] processMsg player[%d] msg=[%d] UnmarshalPB error:[%s]", g.id, player.id, msg.GetMessageID(), err.Error())
+			return
+		}
+		g.result[player.id] = m.GetWinnerID()
+		l4g.Info("[game(%d)] ID_MSG_Result player[%d] winner=[%d]", g.id, player.id, m.GetWinnerID())
+		player.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_Result), nil))
 	default:
 		l4g.Warn("[game(%d)] processMsg unknown message id[%d]", msgID)
 	}
@@ -183,14 +219,25 @@ func (g *Game) Tick(now int64) bool {
 	switch g.State {
 	case k_Ready:
 		delta := now - g.startTime
-		if delta > MaxReadyTime {
-			g.State = k_Over
-			l4g.Error("[game(%d)] game over!! nobody ready", g.id)
+		if delta < MaxReadyTime {
+			if g.checkReady() {
+				g.doStart()
+				g.State = k_Gaming
+			}
+
+		} else {
+			if g.getOnlinePlayerCount() > 0 {
+				//大于最大准备时间，只要有在线的，就强制开始
+				g.doStart()
+				g.State = k_Gaming
+				l4g.Warn("[game(%d)] force start game because ready state is timeout ", g.id)
+			} else {
+				//全都没连进来，直接结束
+				g.State = k_Over
+				l4g.Error("[game(%d)] game over!! nobody ready", g.id)
+			}
 		}
-		if g.checkReady() {
-			g.doStart()
-			g.State = k_Gaming
-		}
+
 		return true
 	case k_Gaming:
 		if g.checkOver() {
@@ -199,21 +246,18 @@ func (g *Game) Tick(now int64) bool {
 			return true
 		}
 
-		delta := now - g.startTime
-		if delta > MaxGameTime {
+		if g.isTimeout() {
 			g.State = k_Over
 			l4g.Warn("[game(%d)] game timeout", g.id)
 			return true
 		}
 
 		g.logic.tick()
-		if g.logic.getFrameCount()-g.clientFrameCount >= BroadcastOffsetFrames {
-			g.broadcastFrameData()
-		}
+		g.broadcastFrameData()
 
 		return true
 	case k_Over:
-		g.doGameover()
+		g.doGameOver()
 		g.State = k_Stop
 		l4g.Info("[game(%d)] do game over", g.id)
 		return true
@@ -229,23 +273,36 @@ func (g *Game) Result() map[uint64]uint64 {
 	return g.result
 }
 
+// Close 关闭游戏
+func (g *Game) Close() {
+	msg := protocol.NewPacket(uint8(pb.ID_MSG_Close), nil)
+	g.broadcast(msg)
+}
+
+// Cleanup 清理游戏
+func (g *Game) Cleanup() {
+	for _, v := range g.players {
+		v.Cleanup()
+	}
+	g.players = make(map[uint64]*Player)
+
+}
+
 func (g *Game) doReady(p *Player) {
 
-	if k_Ready != g.State {
+	if p.isReady == true {
 		return
 	}
 
-	if p.Ready == true {
-		return
-	}
+	p.isReady = true
 
-	p.Ready = true
-
+	msg := protocol.NewPacket(uint8(pb.ID_MSG_Ready), nil)
+	p.SendMessage(msg)
 }
 
 func (g *Game) checkReady() bool {
 	for _, v := range g.players {
-		if !v.Ready {
+		if !v.isReady {
 			return false
 		}
 	}
@@ -255,109 +312,168 @@ func (g *Game) checkReady() bool {
 
 func (g *Game) doStart() {
 
-	ret := protocol.NewPacket(uint8(pb.ID_S2C_Ready), &pb.S2C_ReadyMsg{})
-	g.broadcast(ret)
-
 	g.clientFrameCount = 0
 	g.logic.reset()
+	for _, v := range g.players {
+		v.isReady = true
+		v.loadingProgress = 100
+	}
+	g.startTime = time.Now().Unix()
+	msg := &pb.S2C_StartMsg{
+		TimeStamp: proto.Int64(g.startTime),
+	}
+	ret := protocol.NewPacket(uint8(pb.ID_MSG_Start), msg)
+
+	g.broadcast(ret)
 
 	g.listener.OnGameStart(g.id)
 }
 
-func (g *Game) doGameover() {
-	ret := protocol.NewPacket(uint8(pb.ID_S2C_Result), nil)
-	g.broadcast(ret)
+func (g *Game) doGameOver() {
 
 	g.listener.OnGameOver(g.id)
 }
 
-func (g *Game) pushInput(p *Player, msg *pb.C2S_InputSkillMsg) {
+func (g *Game) pushInput(p *Player, msg *pb.C2S_InputMsg) bool {
 
-	cmd := &command{
-		id:  p.id,
-		sid: msg.GetSid(),
-		sx:  msg.GetX(),
-		sy:  msg.GetY(),
+	cmd := &pb.InputData{
+		Id:         proto.Uint64(p.id),
+		Sid:        proto.Int32(msg.GetSid()),
+		X:          proto.Int32(msg.GetX()),
+		Y:          proto.Int32(msg.GetY()),
+		Roomseatid: proto.Int32(p.idx),
 	}
 
-	g.logic.pushCmd(cmd)
+	return g.logic.pushCmd(cmd)
 }
 
 func (g *Game) doReconnect(p *Player) {
 
-	ret := protocol.NewPacket(uint8(pb.ID_S2C_Ready), &pb.S2C_ReadyMsg{})
+	msg := &pb.S2C_StartMsg{
+		TimeStamp: proto.Int64(g.startTime),
+	}
+	ret := protocol.NewPacket(uint8(pb.ID_MSG_Start), msg)
 	p.SendMessage(ret)
 
-	if g.clientFrameCount <= 0 {
-		return
-	}
-
+	framesCount := g.clientFrameCount
 	var i uint32 = 0
-	for i < g.clientFrameCount {
+	c := 0
+	frameMsg := &pb.S2C_FrameMsg{}
 
-		msg := &pb.S2C_FrameMsg{}
+	for ; i < framesCount; i++ {
 
-		var j uint32 = 0
-		for ; j < MaxReconnectFrames && i < g.clientFrameCount; j++ {
-
-			f := &pb.FrameData{}
-
-			f.FrameID = proto.Uint32(i)
-			msg.Frames = append(msg.Frames, f)
-
-			frameData := g.logic.getFrame(i)
-
-			if nil != frameData {
-				for _, c := range frameData.cmds {
-					input := pb.InputData{
-						Id:  proto.Uint64(c.id),
-						Sid: proto.Int32(c.sid),
-						X:   proto.Int32(c.sy),
-						Y:   proto.Int32(c.sy),
-					}
-
-					f.Input = append(f.Input, &input)
-				}
-			}
-
-			i++
+		frameData := g.logic.getFrame(i)
+		if nil == frameData && i != (framesCount-1) {
+			continue
 		}
 
-		p.SendMessage(protocol.NewPacket(uint8(pb.ID_S2C_Frame), msg))
+		f := &pb.FrameData{
+			FrameID: proto.Uint32(i),
+		}
 
+		if nil != frameData {
+			f.Input = frameData.cmds
+		}
+		frameMsg.Frames = append(frameMsg.Frames, f)
+		c++
+
+		if c >= kMaxFrameDataPerMsg || i == (framesCount-1) {
+			p.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_Frame), frameMsg))
+			c = 0
+			frameMsg = &pb.S2C_FrameMsg{}
+		}
 	}
+
+	p.SetSendFrameCount(g.clientFrameCount)
 
 }
 
 func (g *Game) broadcastFrameData() {
-	msg := &pb.S2C_FrameMsg{}
 
-	for i := g.clientFrameCount; i < g.logic.getFrameCount(); i++ {
-		f := &pb.FrameData{}
-		f.FrameID = proto.Uint32(i)
-		msg.Frames = append(msg.Frames, f)
+	framesCount := g.logic.getFrameCount()
 
-		frameData := g.logic.getFrame(i)
+	if !g.dirty && framesCount-g.clientFrameCount < BroadcastOffsetFrames {
+		return
+	}
 
-		if nil == frameData {
+	defer func() {
+		g.dirty = false
+		g.clientFrameCount = framesCount
+	}()
+
+	/*
+		msg := &pb.S2C_FrameMsg{}
+
+		for i := g.clientFrameCount; i < g.logic.getFrameCount(); i++ {
+			frameData := g.logic.getFrame(i)
+
+			if nil == frameData && i != (g.logic.getFrameCount()-1) {
+				continue
+			}
+
+			f := &pb.FrameData{}
+			f.FrameID = proto.Uint32(i)
+			msg.Frames = append(msg.Frames, f)
+
+			if nil != frameData {
+				f.Input = frameData.cmds
+			}
+
+		}
+		if len(msg.Frames) > 0 {
+			g.broadcast(protocol.NewPacket(uint8(pb.ID_MSG_Frame), msg))
+		}
+	*/
+	now := time.Now().Unix()
+
+	for _, p := range g.players {
+
+		//掉线的
+		if !p.IsOnline() {
 			continue
 		}
 
-		for _, c := range frameData.cmds {
-			input := pb.InputData{
-				Id:  proto.Uint64(c.id),
-				Sid: proto.Int32(c.sid),
-				X:   proto.Int32(c.sy),
-				Y:   proto.Int32(c.sy),
-			}
-
-			f.Input = append(f.Input, &input)
+		if !p.isReady {
+			continue
 		}
 
-	}
-	g.clientFrameCount = g.logic.getFrameCount()
+		//网络不好的
+		if now-p.GetLastHeartbeatTime() >= kBadNetworkThreshold {
+			continue
+		}
 
-	g.broadcast(protocol.NewPacket(uint8(pb.ID_S2C_Frame), msg))
+		//获得这个玩家已经发到哪一帧
+		i := p.GetSendFrameCount()
+		c := 0
+		msg := &pb.S2C_FrameMsg{}
+		for ; i < framesCount; i++ {
+			frameData := g.logic.getFrame(i)
+			if nil == frameData && i != (framesCount-1) {
+				continue
+			}
+
+			f := &pb.FrameData{
+				FrameID: proto.Uint32(i),
+			}
+
+			if nil != frameData {
+				f.Input = frameData.cmds
+			}
+			msg.Frames = append(msg.Frames, f)
+			c++
+
+			//如果是最后一帧或者达到这个消息包能装下的最大帧数，就发送
+			if i == (framesCount-1) || c >= kMaxFrameDataPerMsg {
+				p.SendMessage(protocol.NewPacket(uint8(pb.ID_MSG_Frame), msg))
+				c = 0
+				msg = &pb.S2C_FrameMsg{}
+			}
+
+		}
+
+		p.SetSendFrameCount(framesCount)
+
+	}
 
 }
 
@@ -386,21 +502,22 @@ func (g *Game) getPlayerCount() int {
 	return len(g.players)
 }
 
-func (g *Game) hasOnlinePlayer() bool {
+func (g *Game) getOnlinePlayerCount() int {
 
+	i := 0
 	for _, v := range g.players {
-		if v.Online && nil != v.Client {
-			return true
+		if v.IsOnline() {
+			i++
 		}
 	}
 
-	return false
+	return i
 }
 
 func (g *Game) checkOver() bool {
 	//只要有人没发结果并且还在线，就不结束
 	for _, v := range g.players {
-		if !v.Online {
+		if !v.isOnline {
 			continue
 		}
 
@@ -408,6 +525,12 @@ func (g *Game) checkOver() bool {
 			return false
 		}
 	}
+
+	return true
+}
+
+func (g *Game) isTimeout() bool {
+	return g.logic.getFrameCount() > MaxGameFrame
 
 	return true
 }

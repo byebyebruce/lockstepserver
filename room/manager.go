@@ -14,7 +14,7 @@ func init() {
 	room = make(map[uint64]*Room)
 }
 
-func CreateRoom(id uint64, typeID int32, playerID []uint64, logicServer string) (*Room, bool) {
+func CreateRoom(id uint64, typeID int32, playerID []uint64, randomSeed int32, logicServer string) (*Room, bool) {
 	rw.Lock()
 	defer rw.Unlock()
 
@@ -23,7 +23,7 @@ func CreateRoom(id uint64, typeID int32, playerID []uint64, logicServer string) 
 		return nil, false
 	}
 
-	r = NewRoom(id, typeID, playerID, logicServer)
+	r = NewRoom(id, typeID, playerID, randomSeed, logicServer)
 	room[id] = r
 
 	go func() {

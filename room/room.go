@@ -2,11 +2,11 @@ package room
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/bailu1901/lockstepserver/network"
-
 	l4g "github.com/alecthomas/log4go"
+	"github.com/bailu1901/lockstepserver/network"
 	"github.com/bailu1901/lockstepserver/protocol"
 	"github.com/bailu1901/lockstepserver/room/game"
 )
@@ -14,7 +14,7 @@ import (
 const (
 	Frequency   = 30                      //每分钟心跳频率
 	TickTimer   = time.Second / Frequency //心跳Timer
-	TimeoutTime = time.Minute * 30        //超时时间
+	TimeoutTime = time.Minute * 5         //超时时间
 )
 
 type packet struct {
@@ -27,7 +27,9 @@ type Room struct {
 	wg sync.WaitGroup
 
 	roomID      uint64
+	players     []uint64
 	typeID      int32
+	closeFlag   int32
 	timeStamp   int64
 	secretKey   string
 	logicServer string
@@ -41,9 +43,10 @@ type Room struct {
 }
 
 // NewRoom 构造
-func NewRoom(id uint64, typeID int32, players []uint64, logicServer string) *Room {
+func NewRoom(id uint64, typeID int32, players []uint64, randomSeed int32, logicServer string) *Room {
 	r := &Room{
 		roomID:      id,
+		players:     players,
 		typeID:      typeID,
 		exitChan:    make(chan struct{}),
 		msgQ:        make(chan *packet, 2048),
@@ -54,7 +57,7 @@ func NewRoom(id uint64, typeID int32, players []uint64, logicServer string) *Roo
 		secretKey:   "test_room",
 	}
 
-	r.game = game.NewGame(id, players, r)
+	r.game = game.NewGame(id, players, randomSeed, r)
 
 	return r
 }
@@ -74,6 +77,22 @@ func (r *Room) TimeStamp() int64 {
 	return r.timeStamp
 }
 
+// IsOver 是否已经结束
+func (r *Room) IsOver() bool {
+	return atomic.LoadInt32(&r.closeFlag) != 0
+}
+
+// HasPlayer 是否有这个player
+func (r *Room) HasPlayer(id uint64) bool {
+	for _, v := range r.players {
+		if v == id {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (r *Room) OnJoinGame(id, pid uint64) {
 	l4g.Warn("[room(%d)] onJoinGame %d", id, pid)
 }
@@ -85,39 +104,16 @@ func (r *Room) OnLeaveGame(id, pid uint64) {
 	l4g.Warn("[room(%d)] onLeaveGame %d", id, pid)
 }
 func (r *Room) OnGameOver(id uint64) {
+	atomic.StoreInt32(&r.closeFlag, 1)
+
 	l4g.Warn("[room(%d)] onGameOver", id)
 
 	r.wg.Add(1)
 
-	go func() error {
+	go func() {
 		defer r.wg.Done()
-		/*
-			conn, err := grpc.Dial(r.logicServer, grpc.WithInsecure())
-			if nil != err {
-				l4g.Error("[reporter] ReportResult error:[%s]", err.Error())
-				return err
-			}
-			defer conn.Close()
-
-			client := pb.NewReportPVPResultServiceClient(conn)
-
-			req := &pb.ReportPVPResultRequest{
-				BattleID:  id,
-				Winner:    r.game.Result(),
-				Data:      []byte("12313123"),
-				TotalTime: time.Now().Unix() - r.timeStamp,
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			if _, err := client.ReportResult(ctx, req); nil != err {
-				// TODO
-				l4g.Error("[reporter] ReportResult error:[%s] ret:[%+v]", err.Error(), *req)
-				return err
-			}
-		*/
-		return nil
+		// TODO
+		// http result
 	}()
 
 }
@@ -128,6 +124,7 @@ func (r *Room) OnConnect(conn *network.Conn) bool {
 	conn.SetCallback(r) //SetCallback只能在OnConnect里调
 	r.inChan <- conn
 	l4g.Warn("[room(%d)] OnConnect %d", r.roomID, conn.GetExtraData().(uint64))
+
 	return true
 }
 
@@ -223,7 +220,7 @@ LOOP:
 		}
 	}
 
-	// TODO
+	r.game.Close()
 
 	for i := 3; i > 0; i-- {
 		<-time.After(time.Second)

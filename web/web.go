@@ -55,7 +55,7 @@ func HTTPHandleFuncCreate(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	room, ok := room.CreateRoom(roomID, 0, ps, "test")
+	room, ok := room.CreateRoom(roomID, 0, ps, 0, "test")
 	if ok {
 		ret = fmt.Sprintf("room.ID=[%d] room.Secret=[%s] room.Time=[%d]", room.ID(), room.SecretKey(), room.TimeStamp())
 	} else {

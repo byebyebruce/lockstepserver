@@ -1,21 +1,18 @@
 package game
 
-type command struct {
-	id  uint64
-	sid int32
-	sx  int32
-	sy  int32
-}
+import (
+	"github.com/bailu1901/lockstepserver/pb"
+)
 
 type frameData struct {
 	idx  uint32
-	cmds []*command
+	cmds []*pb.InputData
 }
 
 func newFrameData(index uint32) *frameData {
 	f := &frameData{
 		idx:  index,
-		cmds: make([]*command, 0),
+		cmds: make([]*pb.InputData, 0),
 	}
 
 	return f
@@ -43,15 +40,23 @@ func (l *lockstep) getFrameCount() uint32 {
 	return l.frameCount
 }
 
-func (l *lockstep) pushCmd(cmd *command) {
+func (l *lockstep) pushCmd(cmd *pb.InputData) bool {
 	f, ok := l.frames[l.frameCount]
 	if !ok {
 		f = newFrameData(l.frameCount)
 		l.frames[l.frameCount] = f
 	}
 
+	//检查是否同一帧发来两次操作
+	for _, v := range f.cmds {
+		if v.Id == cmd.Id {
+			return false
+		}
+	}
+
 	f.cmds = append(f.cmds, cmd)
 
+	return true
 }
 
 func (l *lockstep) tick() uint32 {
