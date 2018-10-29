@@ -86,7 +86,11 @@ make
 ### 断线重连
 
 * 客户端只要发 C->S: `MSG_Connect & C2S_ConnectMsg` **(前提是当前游戏房间还存在)**即可进入房间，服务端会把之前的帧分批次发给客户端。(这里可以考虑改成客户端请求缺失的帧)
-	
+
+---
+
+### 客户端工程
+[https://github.com/bailu1901/lockstep-client-unity](https://github.com/bailu1901/lockstep-client-unity)
 
 
 
