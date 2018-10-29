@@ -77,7 +77,7 @@ func Test_KCPServer(t *testing.T) {
 	time.Sleep(time.Second)
 
 	wg := sync.WaitGroup{}
-	const max_con = 1000
+	const max_con = 100
 	for i := 0; i < max_con; i++ {
 		wg.Add(1)
 		time.Sleep(time.Nanosecond)
@@ -232,7 +232,7 @@ func Test_TCPServer(t *testing.T) {
 	time.Sleep(time.Second)
 
 	wg := sync.WaitGroup{}
-	const max_con = 1000
+	const max_con = 100
 	for i := 0; i < max_con; i++ {
 		wg.Add(1)
 		time.Sleep(time.Nanosecond)
