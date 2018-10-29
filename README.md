@@ -4,6 +4,7 @@ golang版帧同步服务器
 [![GoDoc](https://godoc.org/github.com/bailu1901/lockstepserver?status.png)](https://godoc.org/github.com/bailu1901/lockstepserver)
 [![Build Status](https://travis-ci.org/bailu1901/lockstepserver.svg?branch=master)](https://travis-ci.org/bailu1901/lockstepserver)
 [![Go Report](https://goreportcard.com/badge/github.com/bailu1901/lockstepserver)](https://goreportcard.com/report/github.com/bailu1901/lockstepserver)
+
 ---
 		
 `帧同步服务器目标是作为一个可以在运行时扩展，完全脱离玩法逻辑的帧同步服务器。`
@@ -12,6 +13,20 @@ golang版帧同步服务器
 * etcd做为集群注册发现
 * protobuf作为传输协议
 * 服务器间传输可以用grpc和http
+
+---
+### 编译  
+> 安装依赖库
+```
+  go get -u github.com/golang/protobuf/proto  
+  go get -u github.com/alecthomas/log4go
+  go get -u github.com/xtaci/kcp-go
+  go get -u github.com/alecthomas/log4go
+```
+> 编译  
+```
+make
+```
 
 ---
 
@@ -24,8 +39,7 @@ golang版帧同步服务器
 
 ---
 
-### 流程描述([proto文件](pb/message.proto))  
-
+### 网络层
 * 初始化网络层，目前使用的[kcp](https://github.com/skywind3000/kcp)
 * 消息包格式
 	```
@@ -35,6 +49,11 @@ golang版帧同步服务器
 	|---------uint16---------|---------uint8-------|------------bytes-------------|
 	|-----------2------------|----------1----------|-----------len(Body)----------|
 	```
+---
+### 客户端接入流程  
+[**proto文件**](pb/message.proto)
+
+	
 * 消息流程  
 	1. 客户端发送第一个连接的消息包  
 		C->S: `MSG_Connect & C2S_ConnectMsg`
