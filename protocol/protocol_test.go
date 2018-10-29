@@ -7,20 +7,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bailu1901/lockstepserver/proto"
+	"github.com/bailu1901/lockstepserver/pb"
 	"github.com/golang/protobuf/proto"
 )
 
 func Test_SCPacket(t *testing.T) {
 
 	var sID int32 = 19234333
-	msg := &pb.C2S_InputSkillMsg{
+	msg := &pb.C2S_InputMsg{
 		Sid: proto.Int32(sID),
 		X:   proto.Int32(10),
 		Y:   proto.Int32(20),
 	}
 	raw, _ := proto.Marshal(msg)
-	p := NewPacket(uint8(pb.ID_C2S_InputSkill), msg)
+	p := NewPacket(uint8(pb.ID_MSG_Input), msg)
 	if nil == p {
 		t.Fail()
 	}
@@ -41,7 +41,7 @@ func Test_SCPacket(t *testing.T) {
 		t.Error("uint8(ID_C2S_Connect) != id")
 	}
 
-	msg1 := &pb.C2S_InputSkillMsg{}
+	msg1 := &pb.C2S_InputMsg{}
 	if err := proto.Unmarshal(buff[MinPacketLen:], msg1); nil != err {
 		t.Error(err)
 	}
@@ -54,21 +54,21 @@ func Test_SCPacket(t *testing.T) {
 func Benchmark_SCPacket(b *testing.B) {
 
 	var sID int32 = 19234333
-	msg := &pb.C2S_InputSkillMsg{
+	msg := &pb.C2S_InputMsg{
 		Sid: proto.Int32(sID),
 		X:   proto.Int32(10),
 		Y:   proto.Int32(20),
 	}
 
 	for i := 0; i < b.N; i++ {
-		NewPacket(uint8(pb.ID_C2S_InputSkill), msg)
+		NewPacket(uint8(pb.ID_MSG_Input), msg)
 	}
 
 }
 
 func Test_Packet(t *testing.T) {
 	var sID int32 = 19234333
-	msg := &pb.C2S_InputSkillMsg{
+	msg := &pb.C2S_InputMsg{
 		Sid: proto.Int32(sID),
 		X:   proto.Int32(10),
 		Y:   proto.Int32(20000),
@@ -77,7 +77,7 @@ func Test_Packet(t *testing.T) {
 	temp, _ := proto.Marshal(msg)
 
 	p := &Packet{
-		id:   uint8(pb.ID_C2S_InputSkill),
+		id:   uint8(pb.ID_MSG_Input),
 		data: temp,
 	}
 
@@ -94,14 +94,14 @@ func Test_Packet(t *testing.T) {
 
 	packet, _ := ret.(*Packet)
 	if packet.GetMessageID() != p.id {
-		t.Error("packet.GetMessageID() !=  uint8(ID_C2S_InputSkill)")
+		t.Error("packet.GetMessageID() !=  uint8(ID_MSG_Input)")
 	}
 
 	if len(packet.data) != len(p.data) {
 		t.Error("len(packet.data)!=len(p.data)")
 	}
 
-	msg1 := &pb.C2S_InputSkillMsg{}
+	msg1 := &pb.C2S_InputMsg{}
 	err = packet.UnmarshalPB(msg1)
 	if nil != err {
 		t.Error(err)
@@ -113,7 +113,7 @@ func Test_Packet(t *testing.T) {
 
 func Benchmark_Packet(b *testing.B) {
 	var sID int32 = 19234333
-	msg := &pb.C2S_InputSkillMsg{
+	msg := &pb.C2S_InputMsg{
 		Sid: proto.Int32(sID),
 		X:   proto.Int32(10),
 		Y:   proto.Int32(20000),
@@ -122,7 +122,7 @@ func Benchmark_Packet(b *testing.B) {
 	temp, _ := json.Marshal(msg)
 
 	p := &Packet{
-		id:   uint8(pb.ID_C2S_InputSkill),
+		id:   uint8(pb.ID_MSG_Input),
 		data: temp,
 	}
 
