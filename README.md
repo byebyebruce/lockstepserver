@@ -1,5 +1,6 @@
-# lockstepserver
-golang版帧同步服务器
+# Lock Step Server
+
+_**用golang写的帧同步服务器**_
 
 [![GoDoc](https://godoc.org/github.com/bailu1901/lockstepserver?status.png)](https://godoc.org/github.com/bailu1901/lockstepserver)
 [![Build Status](https://travis-ci.org/bailu1901/lockstepserver.svg?branch=master)](https://travis-ci.org/bailu1901/lockstepserver)
@@ -10,9 +11,13 @@ golang版帧同步服务器
 `帧同步服务器目标是作为一个可以在运行时扩展，完全脱离玩法逻辑的帧同步服务器。`
 * 采用KCP(可根据需求改成其他协议)作为网络底层
 * 帧同步作为同步方式
-* etcd做为集群注册发现
 * protobuf作为传输协议
 * 服务器间传输可以用grpc和http
+
+---
+## TODO
+- [ ] ETCD服务发现
+- [ ] gRPC接口
 
 ---
 ### 编译  
@@ -37,10 +42,12 @@ make
 	1. 浏览器打开 http://127.0.0.1:10002
 	1. Room是房间ID，Member填参战者ID(用,隔开)
 
+1. grpc方式(未来会加入)  
+	...
 ---
 
 ### 网络层
-* 初始化网络层，目前使用的[kcp](https://github.com/skywind3000/kcp)
+* 初始化网络层，目前使用的[kcp](https://github.com/skywind3000/kcp)，可以根据需求切换成其他的
 * 消息包格式
 	```
 	|-----------------------------message-----------------------------------------|
