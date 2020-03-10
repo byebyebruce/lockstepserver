@@ -2,9 +2,9 @@
 
 _**用golang写的帧同步服务器**_
 
-[![GoDoc](https://godoc.org/github.com/bailu1901/lockstepserver?status.png)](https://godoc.org/github.com/bailu1901/lockstepserver)
-[![Build Status](https://travis-ci.org/bailu1901/lockstepserver.svg?branch=master)](https://travis-ci.org/bailu1901/lockstepserver)
-[![Go Report](https://goreportcard.com/badge/github.com/bailu1901/lockstepserver)](https://goreportcard.com/report/github.com/bailu1901/lockstepserver)
+[![GoDoc](https://godoc.org/github.com/byebyebruce/lockstepserver?status.png)](https://godoc.org/github.com/byebyebruce/lockstepserver)
+[![Build Status](https://travis-ci.org/bailu1901/lockstepserver.svg?branch=master)](https://travis-ci.org/byebyebruce/lockstepserver)
+[![Go Report](https://goreportcard.com/badge/github.com/byebyebruce/lockstepserver)](https://goreportcard.com/report/github.com/byebyebruce/lockstepserver)
 
 ---
 		
@@ -15,30 +15,22 @@ _**用golang写的帧同步服务器**_
 * 服务器间传输可以用grpc和http
 
 ---
-## TODO
-- [ ] ETCD服务发现
-- [ ] gRPC接口
 
 ---
 ### 编译  
-> 安装依赖库
+
+> 编译example 
 ```
-  go get -u github.com/golang/protobuf/proto  
-  go get -u github.com/alecthomas/log4go
-  go get -u github.com/xtaci/kcp-go
-  go get -u github.com/alecthomas/log4go
-```
-> 编译  
-```
-make
+cd example
+go build
 ```
 
 ---
 
-### 创建房间  
+### example的创建房间  
 
 1. http方式  
-	1. pvp启动时参数 -web=10002
+	1. ./example -web=10002
 	1. 浏览器打开 http://127.0.0.1:10002
 	1. Room是房间ID，Member填参战者ID(用,隔开)
 
@@ -97,7 +89,7 @@ make
 ---
 
 ### 客户端工程
-[https://github.com/bailu1901/lockstep-client-unity](https://github.com/bailu1901/lockstep-client-unity)
+[https://github.com/byebyebruce/lockstep-client-unity](https://github.com/byebyebruce/lockstep-client-unity)
 
 
 

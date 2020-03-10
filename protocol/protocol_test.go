@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bailu1901/lockstepserver/pb"
+	"github.com/byebyebruce/lockstepserver/pb"
 	"github.com/golang/protobuf/proto"
 )
 

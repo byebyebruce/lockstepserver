@@ -14,42 +14,24 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/bailu1901/lockstepserver/kcp_server"
-	"github.com/bailu1901/lockstepserver/protocol"
-	"github.com/bailu1901/lockstepserver/room"
-	_ "github.com/bailu1901/lockstepserver/web"
-
-	"github.com/bailu1901/lockstepserver/config"
-
-	"github.com/bailu1901/lockstepserver/util"
-
+	"github.com/byebyebruce/lockstepserver/kcp_server"
+	"github.com/byebyebruce/lockstepserver/protocol"
+	"github.com/byebyebruce/lockstepserver/room"
+	"github.com/byebyebruce/lockstepserver/util"
 	l4g "github.com/alecthomas/log4go"
 )
 
 var (
 	nodeId     = flag.Uint64("id", 0, "id")
-	configFile = flag.String("config", "config.xml", "config file")
 	gWeb       = flag.String("web", ":10002", "web listen address")
-	outAddress = flag.String("out", ":10086", "out listen address(':10086' means use $localip:10086)")
+	outAddress = flag.String("out", ":10086", "out listen address(':10086' means localhost:10086)")
 )
 
-//LoadConfig 加载配置
+//Init 初始化
 func LoadConfig() bool {
-
-	if err := config.LoadConfig(*configFile); err != nil {
-		panic(fmt.Sprintf("[main] load config %v fail: %v", *configFile, err))
-	}
-
-	config.Cfg.OutAddress = *outAddress
-	temp := strings.Split(config.Cfg.OutAddress, ":")
-	if 0 == len(temp[0]) {
-		config.Cfg.OutAddress = util.GetOutboundIP().String() + config.Cfg.OutAddress
-	}
-
 	return true
 }
 
@@ -81,15 +63,14 @@ func Run() {
 
 	defer room.Stop()
 
+	//address := util.GetLocalIP()
 	//udp server
-	networkServer, err := kcp_server.ListenAndServe(config.Cfg.OutAddress, &room.Router{}, &protocol.MsgProtocol{})
+	networkServer, err := kcp_server.ListenAndServe(*outAddress, &room.Router{}, &protocol.MsgProtocol{})
 	if nil != err {
 		panic(err)
 	}
-	l4g.Info("[main] kcp.Listen addr=[%s]", config.Cfg.OutAddress)
+	l4g.Info("[main] kcp.Listen addr=[%s]", outAddress)
 	defer networkServer.Stop()
-
-	l4g.Info("[main] cluster start! etcd=[%s] key=[%s]", config.Cfg.EtcdEndPionts, config.Cfg.EtcdKey)
 
 	//主循环定时器
 	ticker := time.NewTimer(time.Second)
@@ -111,7 +92,7 @@ QUIT:
 				break QUIT
 			}
 		case <-ticker.C:
-			//break QUIT
+
 		}
 
 	}

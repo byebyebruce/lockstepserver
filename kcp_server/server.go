@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/bailu1901/lockstepserver/network"
+	"github.com/byebyebruce/lockstepserver/network"
 	"github.com/xtaci/kcp-go"
 )
 

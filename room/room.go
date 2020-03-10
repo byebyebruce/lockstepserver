@@ -6,9 +6,9 @@ import (
 	"time"
 
 	l4g "github.com/alecthomas/log4go"
-	"github.com/bailu1901/lockstepserver/network"
-	"github.com/bailu1901/lockstepserver/protocol"
-	"github.com/bailu1901/lockstepserver/room/game"
+	"github.com/byebyebruce/lockstepserver/network"
+	"github.com/byebyebruce/lockstepserver/protocol"
+	"github.com/byebyebruce/lockstepserver/room/game"
 )
 
 const (

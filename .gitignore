@@ -1,4 +1,6 @@
-*.test
+.vscode
+.idea
 *.code-workspace
-*.vscode
+*.test
 debug
+*.exe
