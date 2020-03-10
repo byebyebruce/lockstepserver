@@ -1,7 +1,7 @@
 language: go
 
 go:
-  - 1.10.x
+  - 1.13.x
 
 
 env:
@@ -22,12 +22,8 @@ services:
 
   #- mysql -e 'CREATE DATABASE goworld;'
 
-install:
-  - go get -u github.com/golang/protobuf/proto
-  - go get -u github.com/alecthomas/log4go
-  - go get -u github.com/xtaci/kcp-go
-  - go get -u github.com/alecthomas/log4go
 
 script:
   #- go test -v ./...
-  - make
+  - cd example
+  - go build

@@ -1,7 +1,7 @@
 package game
 
 import (
-	"github.com/bailu1901/lockstepserver/pb"
+	"github.com/byebyebruce/lockstepserver/pb"
 )
 
 type frameData struct {

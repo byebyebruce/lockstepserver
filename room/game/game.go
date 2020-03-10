@@ -3,12 +3,12 @@ package game
 import (
 	"time"
 
-	"github.com/bailu1901/lockstepserver/pb"
-	"github.com/bailu1901/lockstepserver/protocol"
+	"github.com/byebyebruce/lockstepserver/pb"
+	"github.com/byebyebruce/lockstepserver/protocol"
 	"github.com/golang/protobuf/proto"
 
 	l4g "github.com/alecthomas/log4go"
-	"github.com/bailu1901/lockstepserver/network"
+	"github.com/byebyebruce/lockstepserver/network"
 )
 
 // GameState 游戏状态

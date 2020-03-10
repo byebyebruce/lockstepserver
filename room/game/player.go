@@ -1,7 +1,7 @@
 package game
 
 import (
-	"github.com/bailu1901/lockstepserver/network"
+	"github.com/byebyebruce/lockstepserver/network"
 	"time"
 )
 
