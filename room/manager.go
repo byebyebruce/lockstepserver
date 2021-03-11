@@ -1,63 +1,73 @@
 package room
 
 import (
+	"fmt"
 	"sync"
 )
 
-var (
+// RoomManager 房间管理器
+type RoomManager struct {
 	room map[uint64]*Room
 	wg   sync.WaitGroup
 	rw   sync.RWMutex
-)
-
-func init() {
-	room = make(map[uint64]*Room)
 }
 
-func CreateRoom(id uint64, typeID int32, playerID []uint64, randomSeed int32, logicServer string) (*Room, bool) {
-	rw.Lock()
-	defer rw.Unlock()
+// NewRoomManager 构造
+func NewRoomManager() *RoomManager {
+	m := &RoomManager{
+		room: make(map[uint64]*Room),
+	}
+	return m
+}
 
-	r, ok := room[id]
+// CreateRoom 创建房间
+func (m *RoomManager) CreateRoom(id uint64, typeID int32, playerID []uint64, randomSeed int32, logicServer string) (*Room, error) {
+	m.rw.Lock()
+	defer m.rw.Unlock()
+
+	r, ok := m.room[id]
 	if ok {
-		return nil, false
+		return nil, fmt.Errorf("room id[%d] exists", id)
 	}
 
 	r = NewRoom(id, typeID, playerID, randomSeed, logicServer)
-	room[id] = r
+	m.room[id] = r
 
 	go func() {
-		wg.Add(1)
+		m.wg.Add(1)
 		defer func() {
-			rw.Lock()
-			delete(room, id)
-			rw.Unlock()
+			m.rw.Lock()
+			delete(m.room, id)
+			m.rw.Unlock()
 
-			wg.Done()
+			m.wg.Done()
 		}()
 		r.Run()
 
 	}()
 
-	return r, true
+	return r, nil
 }
 
-func GetRoom(id uint64) *Room {
+// GetRoom 获得房间
+func (m *RoomManager) GetRoom(id uint64) *Room {
 
-	rw.RLock()
-	defer rw.RUnlock()
+	m.rw.RLock()
+	defer m.rw.RUnlock()
 
-	r, _ := room[id]
+	r, _ := m.room[id]
 	return r
 }
-func Stop() {
 
-	rw.Lock()
-	for _, v := range room {
+// Stop 停止
+func (m *RoomManager) Stop() {
+
+	m.rw.Lock()
+	for _, v := range m.room {
 		v.Stop()
 	}
-	room = make(map[uint64]*Room)
-	rw.Unlock()
+	m.room = make(map[uint64]*Room)
+	m.rw.Unlock()
 
-	wg.Wait()
+	m.wg.Wait()
 }

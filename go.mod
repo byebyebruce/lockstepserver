@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/alecthomas/log4go v0.0.0-20180109082532-d146e6b86faa
-	github.com/golang/protobuf v1.3.4
+	github.com/golang/protobuf v1.4.1
 	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/reedsolomon v1.9.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -15,4 +15,5 @@ require (
 	github.com/xtaci/lossyconn v0.0.0-20200209145036-adba10fffc37 // indirect
 	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073 // indirect
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
+	google.golang.org/protobuf v1.25.0
 )

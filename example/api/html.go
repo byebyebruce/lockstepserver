@@ -1,4 +1,4 @@
-package web
+package api
 
 const htmlStr = `<html>  
     <head>  
@@ -44,7 +44,7 @@ const htmlStr = `<html>
 		</p>
 
         <p>
-            <button id="btn" style="height:50px;width:50px">click</button>
+            <button id="btn" style="height:50px;width:100px">Create Room</button>
         </p>
 
         <label for="Return">Return:</label>

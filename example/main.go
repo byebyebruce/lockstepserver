@@ -17,17 +17,20 @@ import (
 	"syscall"
 	"time"
 
+	l4g "github.com/alecthomas/log4go"
+	"github.com/byebyebruce/lockstepserver/example/api"
 	"github.com/byebyebruce/lockstepserver/kcp_server"
 	"github.com/byebyebruce/lockstepserver/protocol"
 	"github.com/byebyebruce/lockstepserver/room"
+	"github.com/byebyebruce/lockstepserver/router"
 	"github.com/byebyebruce/lockstepserver/util"
-	l4g "github.com/alecthomas/log4go"
 )
 
 var (
 	nodeId     = flag.Uint64("id", 0, "id")
 	gWeb       = flag.String("web", ":10002", "web listen address")
 	outAddress = flag.String("out", ":10086", "out listen address(':10086' means localhost:10086)")
+	m          *room.RoomManager
 )
 
 //Init 初始化
@@ -37,16 +40,13 @@ func LoadConfig() bool {
 
 //Init 初始化
 func Init() bool {
-	if len(*gWeb) > 0 {
-
-		go func() {
-			e := http.ListenAndServe(*gWeb, nil)
-			if nil != e {
-				panic(e)
-			}
-		}()
-		l4g.Info("[main] http.ListenAndServe port=[%s]", *gWeb)
-	}
+	go func() {
+		e := http.ListenAndServe(*gWeb, nil)
+		if nil != e {
+			panic(e)
+		}
+	}()
+	l4g.Info("[main] http.ListenAndServe port=[%s]", *gWeb)
 
 	return true
 }
@@ -61,16 +61,19 @@ func Run() {
 		l4g.Global.Close()
 	}()
 
-	defer room.Stop()
-
 	//address := util.GetLocalIP()
 	//udp server
-	networkServer, err := kcp_server.ListenAndServe(*outAddress, &room.Router{}, &protocol.MsgProtocol{})
+	networkServer, err := kcp_server.ListenAndServe(*outAddress, router.New(m), &protocol.MsgProtocol{})
 	if nil != err {
 		panic(err)
 	}
-	l4g.Info("[main] kcp.Listen addr=[%s]", outAddress)
+	l4g.Info("[main] kcp.Listen addr=[%s]", *outAddress)
 	defer networkServer.Stop()
+
+	m = room.NewRoomManager()
+	defer m.Stop()
+
+	_ = api.NewHttpApi(m)
 
 	//主循环定时器
 	ticker := time.NewTimer(time.Second)

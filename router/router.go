@@ -1,4 +1,4 @@
-package room
+package router
 
 import (
 	"sync/atomic"
@@ -7,6 +7,7 @@ import (
 	"github.com/byebyebruce/lockstepserver/network"
 	"github.com/byebyebruce/lockstepserver/pb"
 	"github.com/byebyebruce/lockstepserver/protocol"
+	"github.com/byebyebruce/lockstepserver/room"
 
 	l4g "github.com/alecthomas/log4go"
 )
@@ -16,18 +17,29 @@ func verifyToken(secret string) string {
 	return secret
 }
 
+// Router 消息路由器
 type Router struct {
+	m         *room.RoomManager
 	totalConn uint64
 }
 
-func (m *Router) OnConnect(conn *network.Conn) bool {
+// New 构造
+func New(m *room.RoomManager) *Router {
+	return &Router{
+		m: m,
+	}
+}
 
-	id := atomic.AddUint64(&m.totalConn, 1)
+// OnConnect 链接进来
+func (r *Router) OnConnect(conn *network.Conn) bool {
+
+	id := atomic.AddUint64(&r.totalConn, 1)
 	l4g.Debug("[router] OnConnect [%s] totalConn=%d", conn.GetRawConn().RemoteAddr().String(), id)
 	return true
 }
 
-func (m *Router) OnMessage(conn *network.Conn, p network.Packet) bool {
+// OnMessage 消息处理
+func (r *Router) OnMessage(conn *network.Conn, p network.Packet) bool {
 
 	msg := p.(*protocol.Packet)
 
@@ -53,7 +65,7 @@ func (m *Router) OnMessage(conn *network.Conn, p network.Packet) bool {
 			ErrorCode: pb.ERRORCODE_ERR_Ok.Enum(),
 		}
 
-		room := GetRoom(roomID)
+		room := r.m.GetRoom(roomID)
 		if nil == room {
 			ret.ErrorCode = pb.ERRORCODE_ERR_NoRoom.Enum()
 			conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_Connect), ret), time.Millisecond)
@@ -97,17 +109,16 @@ func (m *Router) OnMessage(conn *network.Conn, p network.Packet) bool {
 		// 正式版不会提供这个消息
 		conn.AsyncWritePacket(protocol.NewPacket(uint8(pb.ID_MSG_END), msg.GetData()), time.Millisecond)
 		return true
-	default:
-		return false
 	}
 
 	return false
 
 }
 
-func (m *Router) OnClose(conn *network.Conn) {
-	id := atomic.LoadUint64(&m.totalConn) - 1
-	atomic.StoreUint64(&m.totalConn, id)
+// OnClose 链接断开
+func (r *Router) OnClose(conn *network.Conn) {
+	id := atomic.LoadUint64(&r.totalConn) - 1
+	atomic.StoreUint64(&r.totalConn, id)
 
 	l4g.Info("[router] OnClose: total=%d", id)
 }

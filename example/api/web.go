@@ -1,4 +1,4 @@
-package web
+package api
 
 import (
 	"fmt"
@@ -10,11 +10,21 @@ import (
 	"github.com/byebyebruce/lockstepserver/room"
 )
 
-func init() {
-	http.HandleFunc("/create", HTTPHandleFuncCreate)
-	http.HandleFunc("/", HTTPHandleFunc)
+type HttpApi struct {
+	m *room.RoomManager
 }
-func HTTPHandleFunc(w http.ResponseWriter, r *http.Request) {
+
+func NewHttpApi(m *room.RoomManager) *HttpApi {
+	r := &HttpApi{
+		m: m,
+	}
+
+	http.HandleFunc("/create", r.HTTPHandleFuncCreate)
+	http.HandleFunc("/", r.HTTPHandleFunc)
+	return r
+}
+
+func (h *HttpApi) HTTPHandleFunc(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	if 0 == len(query) {
@@ -28,7 +38,7 @@ func HTTPHandleFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func HTTPHandleFuncCreate(w http.ResponseWriter, r *http.Request) {
+func (h *HttpApi) HTTPHandleFuncCreate(w http.ResponseWriter, r *http.Request) {
 
 	ret := "error"
 
@@ -55,11 +65,11 @@ func HTTPHandleFuncCreate(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	room, ok := room.CreateRoom(roomID, 0, ps, 0, "test")
-	if ok {
-		ret = fmt.Sprintf("room.ID=[%d] room.Secret=[%s] room.Time=[%d]", room.ID(), room.SecretKey(), room.TimeStamp())
+	room, err := h.m.CreateRoom(roomID, 0, ps, 0, "test")
+	if nil != err {
+		ret = err.Error()
 	} else {
-		ret = "failed!"
+		ret = fmt.Sprintf("room.ID=[%d] room.Secret=[%s] room.Time=[%d]", room.ID(), room.SecretKey(), room.TimeStamp())
 	}
 
 }
