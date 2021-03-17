@@ -1,45 +1,25 @@
 # Lock Step Server
 
-_**用golang写的帧同步服务器**_
-
 [![GoDoc](https://godoc.org/github.com/byebyebruce/lockstepserver?status.png)](https://godoc.org/github.com/byebyebruce/lockstepserver)
 [![Build Status](https://travis-ci.org/bailu1901/lockstepserver.svg?branch=master)](https://travis-ci.org/byebyebruce/lockstepserver)
 [![Go Report](https://goreportcard.com/badge/github.com/byebyebruce/lockstepserver)](https://goreportcard.com/report/github.com/byebyebruce/lockstepserver)
 
----
+_**用golang写的帧同步服务器，目标是作为一个可以横向扩展，完全脱离玩法逻辑的帧同步服务器。**_
 		
-`帧同步服务器目标是作为一个可以横向扩展，完全脱离玩法逻辑的帧同步服务器。`
 * 采用KCP(可根据需求改成其他协议)作为网络底层
 * 帧同步作为同步方式
 * protobuf作为传输协议
 * 服务器间传输可以用grpc和http
 
----
 
----
-### 编译  
+### 运行example
 
-> 编译example 
-```
-cd example
-go build
-```
-
----
-
-### example的创建房间  
-
-1. http方式  
-	1. go run example/main.go -web=10002
-	1. 浏览器打开 http://127.0.0.1:10002
-	1. Room是房间ID，Member填参战者ID(用,隔开)
-
-1. grpc方式(未来会加入)  
-	...
----
+1. go run example/main.go
+1. 浏览器打开 http://localhost:10002
+1. Room是房间ID，Member填参战者ID(用,隔开)
 
 ### 网络层
-* 初始化网络层，目前使用的[kcp](https://github.com/skywind3000/kcp)，可以根据需求切换成其他的
+* 初始化网络层，使用的[kcp](https://github.com/skywind3000/kcp)，可以根据需求切换成其他的
 * 消息包格式
 	```
 	|-----------------------------message-----------------------------------------|
@@ -48,7 +28,7 @@ go build
 	|---------uint16---------|---------uint8-------|------------bytes-------------|
 	|-----------2------------|----------1----------|-----------len(Body)----------|
 	```
----
+
 ### 客户端接入流程  
 [**proto文件**](pb/message.proto)
 
@@ -80,13 +60,13 @@ go build
 		**注：客户端收到MSG_Result表示服务端已经收到并处理的客户端发来的结果**  
 		**注：客户端收到MSG_Close表示服务端房间已经关闭，客户端如果游戏流程没完也要强制退出**
 
----
+
 
 ### 断线重连
 
 * 客户端只要发 C->S: `MSG_Connect & C2S_ConnectMsg` **(前提是当前游戏房间还存在)**即可进入房间，服务端会把之前的帧分批次发给客户端。(这里可以考虑改成客户端请求缺失的帧)
 
----
+
 
 ### 客户端工程
 [https://github.com/byebyebruce/lockstep-client-unity](https://github.com/byebyebruce/lockstep-client-unity)
