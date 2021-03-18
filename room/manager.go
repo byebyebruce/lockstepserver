@@ -59,6 +59,15 @@ func (m *RoomManager) GetRoom(id uint64) *Room {
 	return r
 }
 
+// RoomNum 获得房间数量
+func (m *RoomManager) RoomNum() int {
+
+	m.rw.RLock()
+	defer m.rw.RUnlock()
+
+	return len(m.room)
+}
+
 // Stop 停止
 func (m *RoomManager) Stop() {
 
