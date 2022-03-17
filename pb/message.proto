@@ -1,6 +1,8 @@
-syntax = "proto2";
+syntax = "proto3";
 
 package pb;
+option go_package = "github.com/byebyebruce/lockstepserver/pb;pb";
+
 
 //消息ID
 enum ID {

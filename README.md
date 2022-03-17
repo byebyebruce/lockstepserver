@@ -13,15 +13,15 @@ _**用golang写的帧同步服务器，目标是作为一个可以横向扩展�
 * 支持断线重连
 
 
-### 运行example/server
-1. 启动server `go run example/server/main.go`
+### 运行example server
+1. 启动server `go run cmd/example_server/main.go`
 1. 创建房间：
-	* 方法1. 浏览器打开 http://localhost:10002 点创建
-	* 方法2. 命令 `sh example/server/create_room.sh`
+	* 方法1. 浏览器打开 http://localhost 点创建
+	* 方法2. 命令 `sh cmd/example_client/create_room.sh`
 
-### 运行example/client
-1. 启动1号客户端 `go run example/client/main.go -room=1 -id=1`
-1. 启动2号客户端 `go run example/client/main.go -room=1 -id=2`
+### 运行example client
+1. 启动1号客户端 `go run cmd/example_client/main.go -room=1 -id=1`
+1. 启动2号客户端 `go run cmd/example_client/main.go -room=1 -id=2`
 
 ### 网络层
 * 初始化网络层，使用的[kcp-go](https://github.com/xtaci/kcp-go)，可以根据需求切换成其他的

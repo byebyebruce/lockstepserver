@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package testdata;
+option go_package = "github.com/byebyebruce/lockstepserver/pkg/packet/pb_packet/testdata;testdata";
+
+
+//消息ID
+enum ID {
+
+    MSG_BEGIN = 0;
+
+
+    MSG_Test       = 60;
+
+    MSG_END = 255;
+}
+
+
+// TestMsg
+message TestMsg  {
+    optional int32 sid              = 1;    //操作id
+    optional int32 x                = 2;    //操作位置x
+    optional int32 y                = 3;    //操作位置y
+    optional uint32 frameID         = 4;    //帧ID
+}
